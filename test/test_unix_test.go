@@ -22,9 +22,9 @@ import (
 	"testing"
 	"text/template"
 
+	"github.com/fakeboboliu/xssh"
+	"github.com/fakeboboliu/xssh/testdata"
 	"golang.org/x/crypto/internal/testenv"
-	"golang.org/x/crypto/ssh"
-	"golang.org/x/crypto/ssh/testdata"
 )
 
 const (

@@ -16,7 +16,7 @@ import (
 	"sync"
 	"testing"
 
-	"golang.org/x/crypto/ssh/terminal"
+	"github.com/fakeboboliu/xssh/terminal"
 )
 
 type serverType func(Channel, <-chan *Request, *testing.T)
