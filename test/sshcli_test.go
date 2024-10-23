@@ -67,6 +67,10 @@ func TestSSHCLIAuth(t *testing.T) {
 
 	config := &ssh.ServerConfig{
 		PublicKeyCallback: certChecker.Authenticate,
+		Config: ssh.Config{
+			Ciphers: []string{"aes128-ctr"},
+			MACs:    []string{"umac-128@openssh.com"},
+		},
 	}
 	config.AddHostKey(testSigners["rsa"])
 

@@ -15,6 +15,7 @@ import (
 	"fmt"
 	"hash"
 	"io"
+	"strings"
 
 	"github.com/fakeboboliu/xssh/internal/poly1305"
 	"golang.org/x/crypto/chacha20"
@@ -86,6 +87,7 @@ func streamCipherMode(skip int, createFunc func(key, iv []byte) (cipher.Stream, 
 		return &streamPacketCipher{
 			mac:       mac,
 			etm:       macModes[algs.MAC].etm,
+			umac:      strings.HasPrefix(algs.MAC, "umac-"),
 			macResult: make([]byte, mac.Size()),
 			cipher:    stream,
 		}, nil
@@ -139,6 +141,7 @@ type streamPacketCipher struct {
 	mac    hash.Hash
 	cipher cipher.Stream
 	etm    bool
+	umac   bool
 
 	// The following members are to avoid per-packet allocations.
 	prefix      [prefixLen]byte
@@ -167,9 +170,12 @@ func (s *streamPacketCipher) readCipherPacket(seqNum uint32, r io.Reader) ([]byt
 
 	var macSize uint32
 	if s.mac != nil {
-		s.mac.Reset()
-		binary.BigEndian.PutUint32(s.seqNumBytes[:], seqNum)
-		s.mac.Write(s.seqNumBytes[:])
+		if !s.umac {
+			s.mac.Reset()
+			binary.BigEndian.PutUint32(s.seqNumBytes[:], seqNum)
+			s.mac.Write(s.seqNumBytes[:])
+		}
+
 		if s.etm {
 			s.mac.Write(s.prefix[:4])
 			s.mac.Write(encryptedPaddingLength[:])
@@ -211,7 +217,12 @@ func (s *streamPacketCipher) readCipherPacket(seqNum uint32, r io.Reader) ([]byt
 		if !s.etm {
 			s.mac.Write(data)
 		}
-		s.macResult = s.mac.Sum(s.macResult[:0])
+		if s.umac {
+			binary.BigEndian.PutUint64(s.macResult[:], uint64(seqNum))
+			s.macResult = s.mac.Sum(s.macResult[:8])
+		} else {
+			s.macResult = s.mac.Sum(s.macResult[:0])
+		}
 		if subtle.ConstantTimeCompare(s.macResult, mac) != 1 {
 			return nil, errors.New("ssh: MAC failure")
 		}
@@ -246,9 +257,11 @@ func (s *streamPacketCipher) writeCipherPacket(seqNum uint32, w io.Writer, rand 
 	}
 
 	if s.mac != nil {
-		s.mac.Reset()
-		binary.BigEndian.PutUint32(s.seqNumBytes[:], seqNum)
-		s.mac.Write(s.seqNumBytes[:])
+		if !s.umac {
+			s.mac.Reset()
+			binary.BigEndian.PutUint32(s.seqNumBytes[:], seqNum)
+			s.mac.Write(s.seqNumBytes[:])
+		}
 
 		if s.etm {
 			// For EtM algorithms, the packet length must stay unencrypted,
@@ -291,7 +304,12 @@ func (s *streamPacketCipher) writeCipherPacket(seqNum uint32, w io.Writer, rand 
 	}
 
 	if s.mac != nil {
-		s.macResult = s.mac.Sum(s.macResult[:0])
+		if !s.umac {
+			s.macResult = s.mac.Sum(s.macResult[:0])
+		} else {
+			binary.BigEndian.PutUint64(s.macResult[:], uint64(seqNum))
+			s.macResult = s.mac.Sum(s.macResult[:8])
+		}
 		if _, err := w.Write(s.macResult); err != nil {
 			return err
 		}

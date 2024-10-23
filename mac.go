@@ -8,10 +8,13 @@ package ssh
 
 import (
 	"crypto/hmac"
+	"crypto/md5"
 	"crypto/sha1"
 	"crypto/sha256"
 	"crypto/sha512"
 	"hash"
+
+	"github.com/fakeboboliu/umac"
 )
 
 type macMode struct {
@@ -65,4 +68,12 @@ var macModes = map[string]*macMode{
 	"hmac-sha1-96": {20, false, func(key []byte) hash.Hash {
 		return truncatingMAC{12, hmac.New(sha1.New, key)}
 	}},
+	"hmac-md5": {16, false, func(key []byte) hash.Hash {
+		return hmac.New(md5.New, key)
+	}},
+	"hmac-md5-96": {16, false, func(key []byte) hash.Hash {
+		return truncatingMAC{12, hmac.New(md5.New, key)}
+	}},
+	"umac-64@openssh.com":  {16, false, func(key []byte) hash.Hash { return umac.New8(key) }},
+	"umac-128@openssh.com": {16, false, func(key []byte) hash.Hash { return umac.New16(key) }},
 }
